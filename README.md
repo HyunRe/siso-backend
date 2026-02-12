@@ -1,31 +1,116 @@
 # SISO Backend
 
-소개팅 / 음성 매칭 서비스 SISO의 백엔드 서버입니다.
 
-## 기술 스택
+> 실시간 채팅 · 음성 통화를 기반으로 신뢰도 높은 연결을 제공하는 매칭 플랫폼 백엔드 시스템
+
+
+단순 텍스트 기반 매칭의 한계를 개선하기 위해
+**실시간 상호작용(채팅 · 음성 통화)** 중심으로 신뢰를 형성하는 구조를 설계했습니다.
+
+
+---
+
+
+## 1. 프로젝트 소개
+
+
+### 기획 배경
+
+
+기존 소개팅 서비스는 프로필과 텍스트 기반 대화에 의존합니다.
+하지만 실제 신뢰 형성은 **실시간 상호작용**에서 이루어진다고 판단했습니다.
+
+
+SISO는 다음을 목표로 설계되었습니다:
+
+
+- 실시간 채팅 및 음성 통화를 통한 신뢰도 형성
+- JWT + OAuth2 기반 인증/인가 시스템 구축
+- 확장 가능한 비동기 메시징 구조 설계
+- 캐시 계층을 통한 성능 최적화
+- 테스트 자동화 + CI/CD 기반 안정적 배포
+
+
+---
+
+
+## 2. 기술 스택
+
 
 | 분류 | 기술 |
 |------|------|
 | Language | Java 17 |
-| Framework | Spring Boot 3.5.4 |
-| Database | MariaDB / MySQL 8.0 |
+| Framework | Spring Boot 3.x |
+| Security | Spring Security, JWT (jjwt), OAuth2 (Kakao) |
 | ORM | Spring Data JPA, QueryDSL |
-| Cache | Redis, Caffeine |
+| Database | MariaDB / MySQL 8 |
+| Cache | Redis |
 | Message Queue | RabbitMQ |
-| Auth | JWT (jjwt), OAuth2 (Kakao) |
-| Real-time | WebSocket (STOMP) |
+| Real-Time | WebSocket (STOMP) |
 | Call | Agora RTC SDK |
-| Storage | AWS S3 |
 | Push | Firebase Cloud Messaging |
+| Storage | AWS S3 |
+| Infra | Docker, Docker Compose, AWS EC2 |
 | CI/CD | GitHub Actions, AWS CodeDeploy |
-| Infra | Docker, Docker Compose |
-| Test | JUnit 5, Testcontainers, AssertJ, Mockito |
+| Test | JUnit5, Mockito, AssertJ, Testcontainers |
 | Docs | Swagger (springdoc-openapi) |
 
-## 프로젝트 구조
+
+---
+
+
+## 3. 시스템 아키텍처
+
 
 ```
-src/main/java/com/siso/
+┌─────────────┐
+│   Client    │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────────────────┐
+│   Spring Boot API Server        │
+│   (Security + WebSocket)        │
+└──────┬──────────────┬───────────┘
+       │              │
+       ▼              ▼
+┌──────────────┐  ┌──────────────┐
+│    Redis     │  │   RabbitMQ   │
+│   (Cache)    │  │ (Async Msg)  │
+└──────────────┘  └──────────────┘
+       │
+       ▼
+┌──────────────┐
+│   MariaDB    │
+│   (MySQL)    │
+└──────────────┘
+       │
+       ▼
+┌──────────────┐  ┌──────────────┐
+│    AWS S3    │  │  Agora RTC   │
+│  (Storage)   │  │   (Voice)    │
+└──────────────┘  └──────────────┘
+```
+
+
+### 설계 원칙
+
+
+- Controller → 요청/응답만 담당
+- Service → 비즈니스 로직 집중
+- RabbitMQ → 채팅/알림 비동기 처리
+- Redis → 매칭 결과 캐싱
+- Enum 기반 상태 관리 (CallStatus, ChatRoomStatus 등)
+
+
+---
+
+
+## 4. 프로젝트 구조
+
+
+```
+com.siso
 ├── call/              # 음성 통화 (Agora RTC)
 ├── callreview/        # 통화 리뷰
 ├── chat/              # 채팅 (WebSocket + RabbitMQ)
@@ -38,86 +123,174 @@ src/main/java/com/siso/
 └── voicesample/       # 음성 샘플 (S3)
 ```
 
-## 핵심 기능
+
+---
+
+
+## 5. 핵심 기능
+
+
+### 인증 / 인가
+
+
+- Kakao OAuth2 소셜 로그인
+- JWT Access Token (2시간)
+- JWT Refresh Token (2주)
+- Spring Security 필터 체인 기반 인증 처리
+- Refresh Token Rotation 구조 설계
+
+
+---
+
 
 ### AI 매칭 알고리즘
 
-6가지 지표를 가중치 기반으로 계산하여 상위 20명을 추천합니다.
 
-| 지표 | 가중치 | 알고리즘 |
-|------|--------|----------|
+6가지 지표를 가중치 기반으로 계산하여 상위 20명 추천
+
+
+| 지표 | 가중치 | 방식 |
+|------|--------|------|
 | 관심사 유사도 | 30% | Jaccard Similarity |
 | 나이 호환성 | 20% | 거리 기반 감쇠 |
-| MBTI 호환성 | 15% | 궁합 매트릭스 |
-| 지역 근접성 | 15% | 지역 단위 비교 |
-| 활동성 | 10% | 최근 접속 시간 기반 |
-| 생활습관 | 10% | 음주/흡연 호환성 |
+| MBTI | 15% | 궁합 매트릭스 |
+| 지역 | 15% | 지역 단위 비교 |
+| 활동성 | 10% | 최근 접속 시간 |
+| 생활습관 | 10% | 음주/흡연 호환 |
 
-- RabbitMQ를 통한 비동기 처리 (Consumer 3~10개 병렬)
-- Redis 캐싱 (TTL 10분)으로 재조회 최적화
 
-### 채팅 시스템
+#### 성능 개선
 
-- WebSocket(STOMP) 실시간 메시지 전송
-- RabbitMQ로 메시지 안정성 보장 (손실 방지, 자동 재시도)
-- 온라인 사용자: WebSocket 전송 / 오프라인 사용자: FCM 푸시 알림
-- 매칭 전 메시지 5회 제한, 매칭 후 무제한
 
-### 음성 통화
+- Redis 캐싱 (TTL 10분)
+- RabbitMQ Consumer 3~10개 병렬 처리
+- 1000명 기준 성능 테스트 진행
 
-- Agora RTC SDK 기반 1:1 음성 통화
-- 통화 요청 / 수락 / 거절 / 취소 / 종료 상태 관리
+
+---
+
+
+### 실시간 채팅 시스템
+
+
+- WebSocket (STOMP) 기반 양방향 통신
+- RabbitMQ 기반 메시지 안정성 확보
+- 온라인 사용자 → WebSocket 전송
+- 오프라인 사용자 → FCM 푸시 알림
+- 매칭 전 5회 메시지 제한 로직
+
+
+**비동기 설계 이유**
+
+
+채팅 메시지 저장과 알림 전송을 분리하여
+응답 지연 감소 및 장애 내성 확보
+
+
+---
+
+
+### 음성 통화 시스템
+
+
+- Agora RTC SDK 기반 1:1 통화
+- 통화 요청 → 수락 → 거절 → 종료 상태 관리
 - 통화 종료 후 채팅방 생성 옵션
-- 통화 품질 메트릭 수집 (패킷 손실률, 지터, RTT 등)
+- 패킷 손실률, 지터, RTT 등 품질 메트릭 수집
 
-### 인증
 
-- Kakao OAuth2 소셜 로그인
-- JWT Access Token (2시간) + Refresh Token (2주)
-- Spring Security 필터 체인 기반 인증
+---
 
-## 로컬 실행
 
-### 1. 인프라 실행 (Docker)
+## 6. 성능 개선 및 설계 고민
 
-```bash
-docker run -d --name siso-mysql -p 3306:3306 \
-  -e MYSQL_ROOT_PASSWORD=test -e MYSQL_DATABASE=siso_test \
-  mysql:8.0
 
-docker run -d --name siso-redis -p 6379:6379 \
-  redis:7-alpine
+### 1) RabbitMQ 도입
 
-docker run -d --name siso-rabbitmq -p 5672:5672 -p 15672:15672 \
-  -e RABBITMQ_DEFAULT_USER=admin -e RABBITMQ_DEFAULT_PASS=admin123 \
-  rabbitmq:3.12-management
-```
 
-### 2. 애플리케이션 실행
+**문제**
+- 채팅/알림 동기 처리로 응답 지연 발생
 
-```bash
-./gradlew bootRun --args='--spring.profiles.active=local'
-```
 
-### 3. Swagger UI 접속
+**해결**
+- Producer/Consumer 구조 설계
+- 메시지 큐 기반 비동기 처리
+- 재시도 + 중복 방지 로직 구현
 
-```
-http://localhost:8080/swagger-ui/index.html
-```
 
-## 테스트
+---
 
-### 테스트 구조
+
+### 2) Redis 캐시 전략
+
+
+- 매칭 후보 조회 결과 캐싱
+- Cache Key: `matching:{userId}`
+- TTL: 10분
+- 조회 DB 부하 감소
+
+
+---
+
+
+## 7. 테스트 전략
+
 
 ```
 src/test_unit/          # 단위 테스트 (5개)
-src/test_integration/   # 통합 테스트 (12개 테스트 클래스)
+src/test_integration/   # 통합 테스트 (11개)
 ```
 
-단위 테스트와 통합 테스트를 Gradle 커스텀 소스셋으로 분리하여 관리합니다.
-통합 테스트는 Testcontainers로 실제 MySQL 컨테이너를 사용합니다.
+
+Gradle Custom SourceSet으로 분리 관리
+
+
+### 단위 테스트 (5개)
+
+
+| 파일 | 대상 |
+|------|------|
+| `JwtTokenUtilTest` | JWT 토큰 생성/검증/만료 |
+| `OAuthServiceTest` | OAuth2 인증 로직 |
+| `MatchingAlgorithmServiceTest` | 매칭 스코어 6가지 계산 |
+| `AgoraCallServiceTest` | 통화 상태 전환 로직 |
+| `ChatMessageServiceTest` | 메시지 전송/제한 로직 |
+
+
+### 통합 테스트 - API (5개)
+
+
+| 파일 | 대상 |
+|------|------|
+| `UserControllerIntegrationTest` | 사용자 API |
+| `MatchingControllerIntegrationTest` | 매칭 API |
+| `CallQualityControllerIntegrationTest` | 통화 품질 API |
+| `InputValidationTest` | 입력값 검증 (@Valid) |
+| `JwtAuthenticationExceptionTest` | JWT 인증 예외 |
+
+
+### 통합 테스트 - Infrastructure (5개)
+
+
+| 파일 | 대상 |
+|------|------|
+| `AgoraCallServiceIntegrationTest` | 통화 전체 플로우 |
+| `MatchingAlgorithmIntegrationTest` | 매칭 알고리즘 DB 연동 |
+| `MatchingAlgorithmPerformanceTest` | 매칭 성능 (1000명 기준) |
+| `ChatMessageQueueIntegrationTest` | RabbitMQ 메시지 큐 |
+| `ConcurrencyTest` | 동시성 (100개 동시 메시지) |
+
+
+### 통합 테스트 - Repository (1개)
+
+
+| 파일 | 대상 |
+|------|------|
+| `UserRepositoryIntegrationTest` | 사용자 조회 쿼리 |
+
 
 ### 실행
+
 
 ```bash
 # 단위 테스트
@@ -130,62 +303,138 @@ src/test_integration/   # 통합 테스트 (12개 테스트 클래스)
 ./gradlew check
 ```
 
-### 테스트 목록
 
-**단위 테스트**
+---
 
-| 파일 | 대상 |
-|------|------|
-| `JwtTokenUtilTest` | JWT 토큰 생성/검증/만료 |
-| `OAuthServiceTest` | OAuth2 인증 로직 |
-| `MatchingAlgorithmServiceTest` | 매칭 스코어 6가지 계산 |
-| `AgoraCallServiceTest` | 통화 상태 전환 로직 |
-| `ChatMessageServiceTest` | 메시지 전송/제한 로직 |
 
-**통합 테스트 - API**
+## 8. CI/CD
 
-| 파일 | 대상 |
-|------|------|
-| `UserControllerIntegrationTest` | 사용자 API (조회, 로그아웃, 탈퇴) |
-| `MatchingControllerIntegrationTest` | 매칭 API |
-| `CallQualityControllerIntegrationTest` | 통화 품질 API |
-| `InputValidationTest` | 입력값 검증 (@Valid) |
-| `JwtAuthenticationExceptionTest` | JWT 인증 예외 |
-
-**통합 테스트 - Infrastructure**
-
-| 파일 | 대상 |
-|------|------|
-| `AgoraCallServiceIntegrationTest` | 통화 전체 플로우 (요청-수락-종료) |
-| `MatchingAlgorithmIntegrationTest` | 매칭 알고리즘 DB 연동 |
-| `MatchingAlgorithmPerformanceTest` | 매칭 성능 (1000명 기준) |
-| `ChatMessageQueueIntegrationTest` | RabbitMQ 메시지 큐 |
-| `ConcurrencyTest` | 동시성 (100개 동시 메시지) |
-
-**통합 테스트 - Repository**
-
-| 파일 | 대상 |
-|------|------|
-| `UserRepositoryIntegrationTest` | 사용자 조회 쿼리 |
-
-## CI/CD
-
-GitHub Actions를 통해 push/PR 시 자동으로 테스트를 실행합니다.
 
 ```
-push/PR (main, develop)
-  └─ test job
-       ├─ unitTest (단위 테스트)
-       └─ integrationTest (통합 테스트)
-            └─ 전부 통과 시 → build-and-deploy (배포)
+push / PR (main, develop)
+         ↓
+┌─────────────────────┐
+│     GitHub Actions  │
+│  ┌───────────────┐  │
+│  │   unitTest    │  │
+│  └───────────────┘  │
+│  ┌───────────────┐  │
+│  │integrationTest│  │
+│  │ (Testcontainers│ │
+│  │  + Redis      │  │
+│  │  + RabbitMQ)  │  │
+│  └───────────────┘  │
+└─────────────────────┘
+         ↓
+   테스트 통과 시 ✅
 ```
 
-- 통합 테스트는 Testcontainers(MySQL) + CI 서비스(Redis, RabbitMQ)로 실행
-- 배포: JAR 빌드 → S3 업로드 → AWS CodeDeploy → EC2 (main 브랜치만)
-- 배포 파이프라인은 AWS 인프라 구성 후 주석 해제하여 사용
 
-## API 문서
+**현재 상태**
+- GitHub Actions에서 자동 테스트 실행
+- Testcontainers (MySQL) + CI 서비스 (Redis, RabbitMQ)
+- 배포 파이프라인은 AWS 인프라 구성 후 활성화 예정
 
-상세 API 명세는 [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)를 참고하세요.
 
-메시지 큐 아키텍처는 [MESSAGE_QUEUE_DESIGN.md](./MESSAGE_QUEUE_DESIGN.md)를 참고하세요.
+**배포 파이프라인 (AWS 구성 후)**
+```
+테스트 통과 → JAR 빌드 → S3 업로드 → CodeDeploy → EC2
+```
+
+
+---
+
+
+## 9. 트러블슈팅
+
+
+### 1. WebSocket 세션 정리 문제
+
+
+- 서버 재시작 시 세션 정리되지 않음
+- `onCompletion` / `onTimeout` 처리 추가로 해결
+
+
+### 2. 메시지 중복 처리 문제
+
+
+- 비동기 재시도로 인한 중복 수신 발생
+- 메시지 ID 기반 중복 검증 로직 구현
+
+
+### 3. 조회 성능 저하
+
+
+- N+1 문제 발생
+- Fetch Join + QueryDSL 적용으로 해결
+
+
+---
+
+
+## 10. 실행 방법
+
+
+### 1. 인프라 실행
+
+
+```bash
+docker run -d --name siso-mysql -p 3306:3306 \
+  -e MYSQL_ROOT_PASSWORD=test \
+  -e MYSQL_DATABASE=siso_test \
+  mysql:8.0
+
+docker run -d --name siso-redis -p 6379:6379 redis:7-alpine
+
+docker run -d --name siso-rabbitmq \
+  -p 5672:5672 -p 15672:15672 \
+  -e RABBITMQ_DEFAULT_USER=admin \
+  -e RABBITMQ_DEFAULT_PASS=admin123 \
+  rabbitmq:3.12-management
+```
+
+
+### 2. 애플리케이션 실행
+
+
+```bash
+./gradlew bootRun --args='--spring.profiles.active=local'
+```
+
+
+### 3. Swagger
+
+
+```
+http://localhost:8080/swagger-ui/index.html
+```
+
+
+---
+
+
+## 프로젝트를 통해 얻은 경험
+
+
+- 실시간 시스템 설계 경험
+- JWT + OAuth2 인증 직접 구현
+- RabbitMQ 기반 비동기 메시징 설계
+- Redis 캐시 전략 설계
+- N+1 문제 해결 및 쿼리 최적화
+- Testcontainers 기반 통합 테스트 환경 구축
+- CI/CD 자동화 경험
+
+
+---
+
+
+## 담당 영역
+
+
+- 실시간 채팅 시스템 설계 및 구현
+- 음성 통화 기능 구현
+- 매칭 알고리즘 설계
+- RabbitMQ 도입 및 비동기 구조 설계
+- Redis 캐시 적용
+- 테스트 코드 작성
+- CI/CD 파이프라인 구축
