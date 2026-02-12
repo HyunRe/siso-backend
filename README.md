@@ -82,19 +82,21 @@ SISO는 다음을 목표로 설계되었습니다:
  └─────────┘ └─────────┘ └─────────┘ └─────────┘ └───────┘ └───────┘
 ```
 
-- 채팅: WebSocket (STOMP) + RabbitMQ
-- 음성통화: Agora RTC SDK
-- 푸시알림: Firebase Cloud Messaging
-
-
 ### 설계 원칙
 
-
-- Controller → 요청/응답만 담당
-- Service → 비즈니스 로직 집중
-- RabbitMQ → 채팅/알림 비동기 처리
-- Redis → 매칭 결과 캐싱
-- Enum 기반 상태 관리 (CallStatus, ChatRoomStatus 등)
+- **DDD 기반 패키지 구조**
+    - 도메인별 패키지 분리 (call, chat, user, matching, notification 등)
+    - 계층 분리: application / domain / presentation / infrastructure / dto
+- **계층별 역할 분리**
+    - Controller → 요청/응답만 담당
+    - Service → 비즈니스 로직 집중
+    - Entity → 도메인 로직 캡슐화 (상태 전이, 유효성 검증)
+- **인프라 연동**
+    - RabbitMQ → 채팅/알림 비동기 처리
+    - Redis → 매칭 결과 캐싱
+    - FCM → 푸시 알림
+- **상태 관리**
+    - Enum 기반 상태 관리 (CallStatus, ChatRoomStatus, PresenceStatus 등)
 
 
 ---
