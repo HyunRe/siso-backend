@@ -46,6 +46,7 @@ out/
 
 ### Claude Code ###
 .claude/
+CODE_REVIEW.md
 
 ### SISO Backend ###
 # 사용자 업로드 파일들 (런타임에 생성됨)
