@@ -13,6 +13,7 @@ concurrency:
 
 permissions:
   contents: read
+  checks: write
   # (선택) OIDC로 전환할 계획이면 다음 권한도 추가
   # id-token: write
 
