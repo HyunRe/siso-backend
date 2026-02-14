@@ -11,13 +11,12 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.MySQLContainer;
 
 /**
  * Repository 테스트 기본 클래스
  *
  * @DataJpaTest를 사용하여 JPA 관련 컴포넌트만 로드합니다.
- * Testcontainers를 사용하여 실제 MySQL 컨테이너로 테스트합니다.
+ * CI: GitHub Actions MySQL 서비스, 로컬: Testcontainers MySQL 컨테이너
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
@@ -33,12 +32,10 @@ public abstract class RepositoryTestBase {
         }
     }
 
-    private static final MySQLContainer<?> mysql = SharedMySQLContainer.getInstance();
-
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("spring.datasource.url", SharedMySQLContainer::getJdbcUrl);
+        registry.add("spring.datasource.username", SharedMySQLContainer::getUsername);
+        registry.add("spring.datasource.password", SharedMySQLContainer::getPassword);
     }
 }
