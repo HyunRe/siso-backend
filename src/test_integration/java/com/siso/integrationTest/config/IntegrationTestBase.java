@@ -9,7 +9,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
-import org.testcontainers.containers.MySQLContainer;
 
 /**
  * 통합 테스트 기본 클래스 (인증 불필요)
@@ -26,15 +25,13 @@ import org.testcontainers.containers.MySQLContainer;
 })
 public abstract class IntegrationTestBase {
 
-    private static final MySQLContainer<?> mysql = SharedMySQLContainer.getInstance();
-
     @Autowired
     protected MockMvc mockMvc;
 
     @DynamicPropertySource
     static void properties(DynamicPropertyRegistry registry) {
-        registry.add("spring.datasource.url", mysql::getJdbcUrl);
-        registry.add("spring.datasource.username", mysql::getUsername);
-        registry.add("spring.datasource.password", mysql::getPassword);
+        registry.add("spring.datasource.url", SharedMySQLContainer::getJdbcUrl);
+        registry.add("spring.datasource.username", SharedMySQLContainer::getUsername);
+        registry.add("spring.datasource.password", SharedMySQLContainer::getPassword);
     }
 }

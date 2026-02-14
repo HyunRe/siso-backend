@@ -13,6 +13,7 @@ concurrency:
 
 permissions:
   contents: read
+  checks: write
   # (선택) OIDC로 전환할 계획이면 다음 권한도 추가
   # id-token: write
 
@@ -22,6 +23,21 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: siso_test
+          MYSQL_USER: test
+          MYSQL_PASSWORD: test
+          MYSQL_ROOT_PASSWORD: test
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
       redis:
         image: redis:7-alpine
         ports:
@@ -60,20 +76,15 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      # Docker 상태 확인 (Testcontainers 디버깅용)
-      - name: Verify Docker is running
-        run: |
-          docker info
-          docker version
-
       - name: Run unit tests
         run: ./gradlew unitTest --no-daemon
 
       - name: Run integration tests
         env:
-          # Testcontainers 환경 변수 설정
-          TESTCONTAINERS_RYUK_DISABLED: true
-          DOCKER_HOST: unix:///var/run/docker.sock
+          # CI 환경에서는 services로 MySQL을 실행하므로 Testcontainers 비활성화
+          CI_DATABASE_URL: jdbc:mysql://localhost:3306/siso_test
+          CI_DATABASE_USERNAME: test
+          CI_DATABASE_PASSWORD: test
         run: ./gradlew integrationTest --no-daemon
 
       - name: Publish Test Report
